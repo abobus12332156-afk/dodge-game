@@ -1,4 +1,5 @@
 // Улучшенная версия: Game Over экран + бонусы + экран паузы (function(){ const canvas = document.getElementById('game'); const ctx = canvas.getContext('2d'); const W = canvas.width, H = canvas.height;
+alert("JS ЗАГРУЗИЛСЯ");
 
 const scoreEl = document.getElementById('score'); const bestEl = document.getElementById('best'); const startBtn = document.getElementById('startBtn'); const restartBtn = document.getElementById('restartBtn');
 
