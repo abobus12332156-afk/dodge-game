@@ -1,8 +1,18 @@
 // Falling Blocks — стабильная версия без сенсоров
 
-const canvas = document.getElementById("game"); const ctx = canvas.getContext("2d");
+const canvas = document.getElementById("game");
+function resizeCanvas() {
+  const ratio = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
 
-const W = canvas.width; const H = canvas.height;
+  canvas.width = rect.width * ratio;
+  canvas.height = rect.height * ratio;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+}
+
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+const ctx = canvas.getContext("2d");
 
 const startBtn = document.getElementById("startBtn"); const restartBtn = document.getElementById("restartBtn"); const scoreEl = document.getElementById("score"); const bestEl = document.getElementById("best");
 
