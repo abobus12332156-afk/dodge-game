@@ -1,86 +1,203 @@
-// Falling Blocks — стабильная версия без сенсоров
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const startBtn = document.getElementById('startBtn');
+  const restartBtn = document.getElementById('restartBtn');
 
-const canvas = document.getElementById("game");
-function resizeCanvas() {
-  const ratio = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
+  let state = 'idle'; // idle, running, paused, gameover
+  let keys = {};
+  let blocks = [];
+  let spawnTimer = 0;
+  let spawnInterval = 900;
+  let lastTime = 0;
+  let score = 0;
+  let best = parseInt(localStorage.getItem('fb_best')||'0',10);
+  bestEl.textContent = 'Best: ' + best;
 
-  canvas.width = rect.width * ratio;
-  canvas.height = rect.height * ratio;
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-}
+  const player = {w:40,h:18,x:(W-40)/2,y:H-60,speed:6};
 
-resizeCanvas();
-window.addEventListener("resize", resizeCanvas);
-const ctx = canvas.getContext("2d");
+  function reset(){
+    blocks = [];
+    spawnTimer = 0;
+    spawnInterval = 900;
+    score = 0;
+    state = 'idle';
+    player.x = (W-player.w)/2;
+    updateHud();
+  }
 
-function CW() { return canvas.width / (window.devicePixelRatio || 1); }
-function CH() { return canvas.height / (window.devicePixelRatio || 1); }
+  function start(){
+    if(state==='running') return;
+    state = 'running';
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+    startBtn.style.display = 'none';
+    restartBtn.style.display = 'none';
+  }
 
-const startBtn = document.getElementById("startBtn"); const restartBtn = document.getElementById("restartBtn"); const scoreEl = document.getElementById("score"); const bestEl = document.getElementById("best");
+  function gameOver(){
+    state = 'gameover';
+    startBtn.style.display = 'none';
+    restartBtn.style.display = 'inline-block';
+    if(score>best){ best = score; localStorage.setItem('fb_best', String(best)); bestEl.textContent = 'Best: ' + best; }
+  }
 
-let blocks = []; let running = false; let lastTime = 0; let spawnTimer = 0; let spawnDelay = 900; let score = 0;
+  function updateHud(){
+    scoreEl.textContent = 'Score: ' + score;
+  }
 
-const best = Number(localStorage.getItem("best_score") || 0); bestEl.textContent = "Best: " + best;
+  function spawnBlock(){
+    const bw = 20 + Math.random()*60;
+    const bx = Math.random()*(W-bw);
+    const bh = 14 + Math.random()*26;
+    const speed = 1.4 + Math.random()*1.6 + Math.min(3, score/100);
+    blocks.push({x:bx,y:-bh,w:bw,h:bh,spd:speed});
+  }
 
-const player = { w: 40, h: 16, x: W / 2 - 20, y: H - 70, speed: 6, left: false, right: false, };
+  function loop(ts){
+    if(state!=='running') return;
+    const dt = ts - lastTime;
+    lastTime = ts;
 
-function reset() { blocks = []; score = 0; spawnDelay = 900; spawnTimer = 0; player.x = W / 2 - player.w / 2; updateHud(); }
+    // spawn
+    spawnTimer += dt;
+    if(spawnTimer > spawnInterval){
+      spawnTimer = 0;
+      spawnBlock();
+      if(spawnInterval>350) spawnInterval *= 0.985; // speed up gradually
+    }
 
-function updateHud() { scoreEl.textContent = "Score: " + score; }
+    // input (keyboard + touch)
+    if(keys['ArrowLeft']||keys['a']||keys['leftTouch']) player.x -= player.speed;
+    if(keys['ArrowRight']||keys['d']||keys['rightTouch']) player.x += player.speed;
+    // sensor tilt adds analog movement when enabled
+    if(typeof sensorActive !== 'undefined' && sensorActive && Math.abs(sensorGamma) > 1){
+      const factor = 0.08;
+      player.x += sensorGamma * factor * (dt/16);
+    }
+    player.x = Math.max(0, Math.min(W-player.w, player.x));
 
-function spawnBlock() { const w = 20 + Math.random() * 50; const h = 16 + Math.random() * 24; const x = Math.random() * (W - w); const speed = 2 + Math.random() * 2; blocks.push({ x, y: -h, w, h, speed }); }
+    // update blocks
+    for(let i=blocks.length-1;i>=0;i--){
+      const b = blocks[i];
+      b.y += b.spd * (dt/16);
+      if(b.y > H){ blocks.splice(i,1); score += 1; updateHud(); }
+      // collision
+      if(player.x < b.x + b.w && player.x + player.w > b.x && player.y < b.y + b.h && player.y + player.h > b.y){
+        gameOver();
+      }
+    }
 
-function loop(ts) { if (!running) return;
+    // render
+    ctx.clearRect(0,0,W,H);
+    // background subtle gradient
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#021021'); g.addColorStop(1,'#001016');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
 
-const dt = ts - lastTime; lastTime = ts;
+    // player
+    ctx.fillStyle = '#0ea5a4';
+    roundRect(ctx, player.x, player.y, player.w, player.h, 4);
 
-spawnTimer += dt; if (spawnTimer > spawnDelay) { spawnTimer = 0; spawnBlock(); if (spawnDelay > 350) spawnDelay *= 0.97; }
+    // blocks
+    ctx.fillStyle = '#f97316';
+    for(const b of blocks){ roundRect(ctx, b.x, b.y, b.w, b.h, 3); }
 
-if (player.left) player.x -= player.speed; if (player.right) player.x += player.speed; player.x = Math.max(0, Math.min(W - player.w, player.x));
+    // score small overlay
+    ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(6,6,110,28);
+    ctx.fillStyle = '#e6eef8'; ctx.font = '14px system-ui,Segoe UI,Roboto'; ctx.fillText('Score: '+score, 12, 24);
 
-for (let i = blocks.length - 1; i >= 0; i--) { const b = blocks[i]; b.y += b.speed * (dt / 16);
+    if(state==='running') requestAnimationFrame(loop);
+  }
 
-if (b.y > H) {
-  blocks.splice(i, 1);
-  score++;
-  updateHud();
-  continue;
-}
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+    ctx.fill();
+  }
 
-const pad = 6;
+  // input handlers
+  window.addEventListener('keydown',e=>{
+    if(e.key === ' '){
+      e.preventDefault();
+      if(state==='running'){ state='paused'; startBtn.style.display='inline-block'; startBtn.textContent='Resume'; }
+      else if(state==='paused'){ state='running'; startBtn.style.display='none'; startBtn.textContent='Start'; lastTime = performance.now(); requestAnimationFrame(loop); }
+      return;
+    }
+    keys[e.key] = true;
+  });
+  window.addEventListener('keyup',e=>{ keys[e.key] = false; });
 
-if (
-  player.x + pad < b.x + b.w - pad &&
-  player.x + player.w - pad > b.x + pad &&
-  player.y + pad < b.y + b.h - pad &&
-  player.y + player.h - pad > b.y + pad
-) {
-  gameOver();
-}
+  // touch / mouse controls for mobile buttons
+  const leftBtn = document.getElementById('leftBtn');
+  const rightBtn = document.getElementById('rightBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
 
-ctx.clearRect(0, 0, W, H);
+  function bindButton(btn, keyName){
+    if(!btn) return;
+    btn.addEventListener('touchstart', e=>{ e.preventDefault(); keys[keyName] = true; }, {passive:false});
+    btn.addEventListener('touchend', e=>{ e.preventDefault(); keys[keyName] = false; }, {passive:false});
+    btn.addEventListener('mousedown', e=>{ e.preventDefault(); keys[keyName] = true; });
+    window.addEventListener('mouseup', e=>{ keys[keyName] = false; });
+  }
+  bindButton(leftBtn, 'leftTouch');
+  bindButton(rightBtn, 'rightTouch');
 
-ctx.fillStyle = "#020617"; ctx.fillRect(0, 0, W, H);
+  if(pauseBtn){
+    pauseBtn.addEventListener('click', ()=>{
+      if(state==='running'){ state='paused'; startBtn.style.display='inline-block'; startBtn.textContent='Resume'; }
+      else if(state==='paused'){ state='running'; startBtn.style.display='none'; startBtn.textContent='Start'; lastTime = performance.now(); requestAnimationFrame(loop); }
+    });
+  }
 
-ctx.fillStyle = "#22d3ee"; ctx.fillRect(player.x, player.y, player.w, player.h);
+  // sensor button (tilt) and device orientation handling
+  const sensorBtn = document.getElementById('sensorBtn');
+  let sensorActive = false;
+  let sensorGamma = 0;
+  let sensorListener = null;
 
-ctx.fillStyle = "#fb923c"; blocks.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+  function handleOrientation(e){
+    sensorGamma = e.gamma || 0;
+  }
 
-requestAnimationFrame(loop); }
+  async function enableSensor(){
+    if(sensorActive) return;
+    if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+      try{
+        const resp = await DeviceOrientationEvent.requestPermission();
+        if(resp !== 'granted') { alert('Разрешение на датчик не получено'); return; }
+      }catch(err){ alert('Не удалось запросить разрешение'); return; }
+    }
+    sensorListener = handleOrientation;
+    window.addEventListener('deviceorientation', sensorListener);
+    sensorActive = true;
+    if(sensorBtn) sensorBtn.textContent = 'Tilt: On';
+  }
 
-function start() { reset(); running = true; lastTime = performance.now(); startBtn.style.display = "none"; restartBtn.style.display = "none"; requestAnimationFrame(loop); }
+  function disableSensor(){
+    if(!sensorActive) return;
+    if(sensorListener) window.removeEventListener('deviceorientation', sensorListener);
+    sensorListener = null;
+    sensorActive = false;
+    sensorGamma = 0;
+    if(sensorBtn) sensorBtn.textContent = 'Tilt: Off';
+  }
 
-function gameOver() { running = false; restartBtn.style.display = "inline-block";
+  if(sensorBtn){
+    sensorBtn.addEventListener('click', ()=>{ if(!sensorActive) enableSensor(); else disableSensor(); });
+  }
 
-const bestNow = Number(localStorage.getItem("best_score") || 0); if (score > bestNow) { localStorage.setItem("best_score", score); bestEl.textContent = "Best: " + score; } }
+  startBtn.addEventListener('click', ()=>{ if(state==='idle' || state==='gameover'){ reset(); start(); } else if(state==='paused'){ state='running'; startBtn.style.display='none'; startBtn.textContent='Start'; lastTime = performance.now(); requestAnimationFrame(loop); } else { start(); } });
+  restartBtn.addEventListener('click', ()=>{ reset(); start(); restartBtn.style.display='none'; });
 
-window.addEventListener("keydown", e => { if (e.key === "ArrowLeft" || e.key === "a") player.left = true; if (e.key === "ArrowRight" || e.key === "d") player.right = true; });
-
-window.addEventListener("keyup", e => { if (e.key === "ArrowLeft" || e.key === "a") player.left = false; if (e.key === "ArrowRight" || e.key === "d") player.right = false; });
-
-const leftBtn = document.getElementById("leftBtn"); const rightBtn = document.getElementById("rightBtn");
-
-leftBtn?.addEventListener("touchstart", () => player.left = true); leftBtn?.addEventListener("touchend", () => player.left = false); rightBtn?.addEventListener("touchstart", () => player.right = true); rightBtn?.addEventListener("touchend", () => player.right = false);
-
-startBtn.addEventListener("click", start); restartBtn.addEventListener("click", start);
+  // init
+  reset();
+})();
