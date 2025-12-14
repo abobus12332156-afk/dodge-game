@@ -14,6 +14,9 @@ resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 const ctx = canvas.getContext("2d");
 
+function CW() { return canvas.width / (window.devicePixelRatio || 1); }
+function CH() { return canvas.height / (window.devicePixelRatio || 1); }
+
 const startBtn = document.getElementById("startBtn"); const restartBtn = document.getElementById("restartBtn"); const scoreEl = document.getElementById("score"); const bestEl = document.getElementById("best");
 
 let blocks = []; let running = false; let lastTime = 0; let spawnTimer = 0; let spawnDelay = 900; let score = 0;
