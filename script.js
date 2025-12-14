@@ -48,14 +48,15 @@ if (b.y > H) {
   continue;
 }
 
+const pad = 6;
+
 if (
-  player.x < b.x + b.w &&
-  player.x + player.w > b.x &&
-  player.y < b.y + b.h &&
-  player.y + player.h > b.y
+  player.x + pad < b.x + b.w - pad &&
+  player.x + player.w - pad > b.x + pad &&
+  player.y + pad < b.y + b.h - pad &&
+  player.y + player.h - pad > b.y + pad
 ) {
   gameOver();
-  return;
 }
 
 }
