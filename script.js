@@ -20,7 +20,16 @@ function updateHud(){scoreEl.textContent='Score: '+score;livesEl.textContent='Li
 
 function spawnBlock(){const bw=20+Math.random()*60,bx=Math.random()*(W-bw),bh=14+Math.random()*26,speed=1.5+Math.random()*1.8+Math.min(3,score/120);blocks.push({x:bx,y:-bh,w:bw,h:bh,spd:speed});}
 function spawnBonus(){const type=Math.random()<0.5?'shield':'slow';bonuses.push({x:Math.random()*(W-24),y:-24,s:24,type});}
-function hit(){if(invuln>0)return;lives--;invuln=1200;shake=12;updateHud();if(lives<=0)gameOver();}
+function hit() {
+  if (invuln > 0) return;
+  lives--;
+  invuln = 1200;
+  shake = 12;
+  // толчок игрока назад
+  player.y -= 10;
+  updateHud();
+  if (lives <= 0) gameOver();
+}
 
 function loop(ts){
 if(state!=='running')return;
@@ -54,3 +63,4 @@ startBtn.onclick=()=>{reset();start();};
 
 reset();
 })();
+
