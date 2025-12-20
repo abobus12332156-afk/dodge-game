@@ -2,18 +2,26 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
+
   const scoreEl = document.getElementById('score');
   const bestEl = document.getElementById('best');
   const startBtn = document.getElementById('startBtn');
   const restartBtn = document.getElementById('restartBtn');
 
-  let state = 'idle'; // idle, running, paused, gameover
+  let state = 'idle';
   let keys = {};
   let blocks = [];
+  let bonuses = [];
   let spawnTimer = 0;
   let spawnInterval = 900;
   let lastTime = 0;
   let score = 0;
+
+  let lives = 3;
+  let invuln = 0;
+  let shake = 0;
+  let slowTime = 0;
+
   let best = parseInt(localStorage.getItem('fb_best')||'0',10);
   bestEl.textContent = 'Best: ' + best;
 
@@ -21,96 +29,165 @@
 
   function reset(){
     blocks = [];
+    bonuses = [];
     spawnTimer = 0;
     spawnInterval = 900;
     score = 0;
+    lives = 3;
+    invuln = 0;
+    slowTime = 0;
     state = 'idle';
     player.x = (W-player.w)/2;
     updateHud();
   }
 
   function start(){
-    if(state==='running') return;
     state = 'running';
     lastTime = performance.now();
-    requestAnimationFrame(loop);
     startBtn.style.display = 'none';
     restartBtn.style.display = 'none';
+    requestAnimationFrame(loop);
   }
 
   function gameOver(){
     state = 'gameover';
-    startBtn.style.display = 'none';
     restartBtn.style.display = 'inline-block';
-    if(score>best){ best = score; localStorage.setItem('fb_best', String(best)); bestEl.textContent = 'Best: ' + best; }
+    if(score > best){
+      best = score;
+      localStorage.setItem('fb_best', best);
+      bestEl.textContent = 'Best: ' + best;
+    }
   }
 
   function updateHud(){
-    scoreEl.textContent = 'Score: ' + score;
+    scoreEl.textContent = `Score: ${score} | Lives: ${lives}`;
   }
 
   function spawnBlock(){
     const bw = 20 + Math.random()*60;
     const bx = Math.random()*(W-bw);
     const bh = 14 + Math.random()*26;
-    const speed = 1.4 + Math.random()*1.6 + Math.min(3, score/100);
+    const speed = 1.5 + Math.random()*1.8 + Math.min(3, score/120);
     blocks.push({x:bx,y:-bh,w:bw,h:bh,spd:speed});
   }
 
+  function spawnBonus(){
+    const type = Math.random() < 0.5 ? 'shield' : 'slow';
+    bonuses.push({
+      x: Math.random()*(W-24),
+      y: -24,
+      s: 24,
+      type
+    });
+  }
+
+  function hit(){
+    if(invuln > 0) return;
+    lives--;
+    invuln = 1200;
+    shake = 12;
+    updateHud();
+    if(lives <= 0) gameOver();
+  }
+
   function loop(ts){
-    if(state!=='running') return;
+    if(state !== 'running') return;
     const dt = ts - lastTime;
     lastTime = ts;
 
-    // spawn
     spawnTimer += dt;
     if(spawnTimer > spawnInterval){
       spawnTimer = 0;
       spawnBlock();
-      if(spawnInterval>350) spawnInterval *= 0.985; // speed up gradually
+      if(Math.random() < 0.15) spawnBonus();
+      if(spawnInterval > 320) spawnInterval *= 0.985;
     }
 
-    // input (keyboard + touch)
     if(keys['ArrowLeft']||keys['a']||keys['leftTouch']) player.x -= player.speed;
     if(keys['ArrowRight']||keys['d']||keys['rightTouch']) player.x += player.speed;
-    // sensor tilt adds analog movement when enabled
-    if(typeof sensorActive !== 'undefined' && sensorActive && Math.abs(sensorGamma) > 1){
-      const factor = 0.08;
-      player.x += sensorGamma * factor * (dt/16);
-    }
     player.x = Math.max(0, Math.min(W-player.w, player.x));
 
-    // update blocks
+    const timeFactor = slowTime > 0 ? 0.4 : 1;
+
     for(let i=blocks.length-1;i>=0;i--){
       const b = blocks[i];
-      b.y += b.spd * (dt/16);
-      if(b.y > H){ blocks.splice(i,1); score += 1; updateHud(); }
-      // collision
-      if(player.x < b.x + b.w && player.x + player.w > b.x && player.y < b.y + b.h && player.y + player.h > b.y){
-        gameOver();
+      b.y += b.spd * timeFactor * (dt/16);
+      if(b.y > H){
+        blocks.splice(i,1);
+        score++;
+        updateHud();
+      }
+      if(invuln<=0 &&
+        player.x < b.x + b.w &&
+        player.x + player.w > b.x &&
+        player.y < b.y + b.h &&
+        player.y + player.h > b.y){
+          blocks.splice(i,1);
+          hit();
       }
     }
 
-    // render
-    ctx.clearRect(0,0,W,H);
-    // background subtle gradient
-    const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,'#021021'); g.addColorStop(1,'#001016');
-    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    for(let i=bonuses.length-1;i>=0;i--){
+      const bo = bonuses[i];
+      bo.y += 2 * (dt/16);
+      if(bo.y > H) bonuses.splice(i,1);
+      if(player.x < bo.x + bo.s &&
+         player.x + player.w > bo.x &&
+         player.y < bo.y + bo.s &&
+         player.y + player.h > bo.y){
+          if(bo.type === 'shield') lives++;
+          if(bo.type === 'slow') slowTime = 4000;
+          bonuses.splice(i,1);
+          updateHud();
+      }
+    }
 
-    // player
-    ctx.fillStyle = '#0ea5a4';
+    invuln -= dt;
+    slowTime -= dt;
+    shake *= 0.85;
+
+    // render
+    ctx.save();
+    if(shake > 0){
+      ctx.translate(
+        (Math.random()-0.5)*shake,
+        (Math.random()-0.5)*shake
+      );
+    }
+
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle = invuln>0 ? '#7dd3fc' : '#0ea5a4';
     roundRect(ctx, player.x, player.y, player.w, player.h, 4);
 
-    // blocks
     ctx.fillStyle = '#f97316';
-    for(const b of blocks){ roundRect(ctx, b.x, b.y, b.w, b.h, 3); }
+    blocks.forEach(b=>roundRect(ctx,b.x,b.y,b.w,b.h,3));
 
-    // score small overlay
-    ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(6,6,110,28);
-    ctx.fillStyle = '#e6eef8'; ctx.font = '14px system-ui,Segoe UI,Roboto'; ctx.fillText('Score: '+score, 12, 24);
+    bonuses.forEach(b=>{
+      ctx.fillStyle = b.type==='shield'?'#22c55e':'#38bdf8';
+      ctx.beginPath();
+      ctx.arc(b.x+b.s/2,b.y+b.s/2,b.s/2,0,Math.PI*2);
+      ctx.fill();
+    });
+
+    if(state==='paused'){
+      overlay('PAUSED');
+    }
+
+    ctx.restore();
 
     if(state==='running') requestAnimationFrame(loop);
+  }
+
+  function overlay(text){
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#fff';
+    ctx.font='bold 32px system-ui';
+    ctx.textAlign='center';
+    ctx.fillText(text,W/2,H/2);
   }
 
   function roundRect(ctx,x,y,w,h,r){
@@ -124,80 +201,18 @@
     ctx.fill();
   }
 
-  // input handlers
   window.addEventListener('keydown',e=>{
-    if(e.key === ' '){
+    if(e.key===' '){
       e.preventDefault();
       if(state==='running'){ state='paused'; startBtn.style.display='inline-block'; startBtn.textContent='Resume'; }
-      else if(state==='paused'){ state='running'; startBtn.style.display='none'; startBtn.textContent='Start'; lastTime = performance.now(); requestAnimationFrame(loop); }
-      return;
+      else if(state==='paused'){ state='running'; startBtn.style.display='none'; lastTime=performance.now(); requestAnimationFrame(loop); }
     }
-    keys[e.key] = true;
+    keys[e.key]=true;
   });
-  window.addEventListener('keyup',e=>{ keys[e.key] = false; });
+  window.addEventListener('keyup',e=>keys[e.key]=false);
 
-  // touch / mouse controls for mobile buttons
-  const leftBtn = document.getElementById('leftBtn');
-  const rightBtn = document.getElementById('rightBtn');
-  const pauseBtn = document.getElementById('pauseBtn');
+  startBtn.onclick=()=>{ reset(); start(); };
+  restartBtn.onclick=()=>{ reset(); start(); };
 
-  function bindButton(btn, keyName){
-    if(!btn) return;
-    btn.addEventListener('touchstart', e=>{ e.preventDefault(); keys[keyName] = true; }, {passive:false});
-    btn.addEventListener('touchend', e=>{ e.preventDefault(); keys[keyName] = false; }, {passive:false});
-    btn.addEventListener('mousedown', e=>{ e.preventDefault(); keys[keyName] = true; });
-    window.addEventListener('mouseup', e=>{ keys[keyName] = false; });
-  }
-  bindButton(leftBtn, 'leftTouch');
-  bindButton(rightBtn, 'rightTouch');
-
-  if(pauseBtn){
-    pauseBtn.addEventListener('click', ()=>{
-      if(state==='running'){ state='paused'; startBtn.style.display='inline-block'; startBtn.textContent='Resume'; }
-      else if(state==='paused'){ state='running'; startBtn.style.display='none'; startBtn.textContent='Start'; lastTime = performance.now(); requestAnimationFrame(loop); }
-    });
-  }
-
-  // sensor button (tilt) and device orientation handling
-  const sensorBtn = document.getElementById('sensorBtn');
-  let sensorActive = false;
-  let sensorGamma = 0;
-  let sensorListener = null;
-
-  function handleOrientation(e){
-    sensorGamma = e.gamma || 0;
-  }
-
-  async function enableSensor(){
-    if(sensorActive) return;
-    if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
-      try{
-        const resp = await DeviceOrientationEvent.requestPermission();
-        if(resp !== 'granted') { alert('Разрешение на датчик не получено'); return; }
-      }catch(err){ alert('Не удалось запросить разрешение'); return; }
-    }
-    sensorListener = handleOrientation;
-    window.addEventListener('deviceorientation', sensorListener);
-    sensorActive = true;
-    if(sensorBtn) sensorBtn.textContent = 'Tilt: On';
-  }
-
-  function disableSensor(){
-    if(!sensorActive) return;
-    if(sensorListener) window.removeEventListener('deviceorientation', sensorListener);
-    sensorListener = null;
-    sensorActive = false;
-    sensorGamma = 0;
-    if(sensorBtn) sensorBtn.textContent = 'Tilt: Off';
-  }
-
-  if(sensorBtn){
-    sensorBtn.addEventListener('click', ()=>{ if(!sensorActive) enableSensor(); else disableSensor(); });
-  }
-
-  startBtn.addEventListener('click', ()=>{ if(state==='idle' || state==='gameover'){ reset(); start(); } else if(state==='paused'){ state='running'; startBtn.style.display='none'; startBtn.textContent='Start'; lastTime = performance.now(); requestAnimationFrame(loop); } else { start(); } });
-  restartBtn.addEventListener('click', ()=>{ reset(); start(); restartBtn.style.display='none'; });
-
-  // init
   reset();
 })();
