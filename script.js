@@ -16,7 +16,7 @@ const player={w:40,h:18,x:(W-40)/2,y:H-60,speed:6};
 const particles=[];
 
 // Audio setup
-const audio = new Audio('vooce.mp3'); // вставь сюда путь к треку
+const audio = new Audio('vooce.mp3'); 
 audio.crossOrigin = "anonymous";
 audio.loop = true;
 
@@ -36,8 +36,11 @@ function reset(){
 
 function start(){
     state='running'; lastTime=performance.now(); startBtn.style.display='none';
-    if(audioCtx.state==='suspended') audioCtx.resume();
-    audio.play();
+    
+    // user gesture для аудио
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    audio.play().catch(()=>console.log('Audio play blocked'));
+
     requestAnimationFrame(loop);
 }
 
@@ -85,7 +88,7 @@ function loop(ts){
     analyser.getByteFrequencyData(dataArray);
     const bass = dataArray.slice(0,10).reduce((a,b)=>a+b,0)/10;
 
-    if(bass>150) spawnBlock(); // падение блока в такт баса
+    if(bass>80) spawnBlock(); // падение блока в такт баса
 
     if(spawnTimer>spawnInterval){
         spawnTimer=0;
@@ -130,8 +133,8 @@ function loop(ts){
     ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
 
     // красное мерцание по басу
-    if(bass>120){
-        ctx.fillStyle=`rgba(255,0,0,${Math.min(0.3,(bass-120)/120)})`;
+    if(bass>80){
+        ctx.fillStyle=`rgba(255,0,0,${Math.min(0.3,(bass-80)/80)})`;
         ctx.fillRect(0,0,W,H);
     }
 
@@ -172,6 +175,8 @@ window.addEventListener('keydown',e=>{
     keys[e.key]=true;
 });
 window.addEventListener('keyup',e=>keys[e.key]=false);
+
+// Start кнопка теперь полностью запускает аудио и игру
 startBtn.onclick=()=>{ reset(); start(); };
 
 reset();
