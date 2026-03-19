@@ -176,6 +176,45 @@ function draw() {
   ctx.fillStyle = player.shield ? 'lime' : '#0ea5a4';
   ctx.fillRect(player.x, player.y, player.w, player.h);
 
+let touchLeft = false;
+let touchRight = false;
+
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+
+// удержание кнопок
+leftBtn.addEventListener('touchstart', e => {
+  e.preventDefault();
+  touchLeft = true;
+}, { passive: false });
+
+leftBtn.addEventListener('touchend', e => {
+  e.preventDefault();
+  touchLeft = false;
+}, { passive: false });
+
+rightBtn.addEventListener('touchstart', e => {
+  e.preventDefault();
+  touchRight = true;
+}, { passive: false });
+
+rightBtn.addEventListener('touchend', e => {
+  e.preventDefault();
+  touchRight = false;
+}, { passive: false });
+
+// пауза
+pauseBtn.addEventListener('click', () => {
+  if (state === 'running') {
+    state = 'paused';
+    startBtn.style.display = 'inline-block';
+    startBtn.textContent = "Resume";
+  } else if (state === 'paused') {
+    start();
+  }
+});
+
   // блоки
   ctx.fillStyle = 'red';
   blocks.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
