@@ -120,8 +120,8 @@ function loop(ts) {
   }
 
   // движение игрока
-  if (keys['arrowleft'] || keys['a']) player.x -= player.speed;
-  if (keys['arrowright'] || keys['d']) player.x += player.speed;
+ if (keys['arrowleft'] || keys['a'] || touchLeft) player.x -= player.speed;
+if (keys['arrowright'] || keys['d'] || touchRight) player.x += player.speed;
 
   player.x = Math.max(0, Math.min(W - player.w, player.x));
 
