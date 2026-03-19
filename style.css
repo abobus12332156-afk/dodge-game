@@ -112,3 +112,23 @@ span{
     margin-bottom: 20px;
   }
 }
+
+.touch-controls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.touch-controls button {
+  font-size: 20px;
+  padding: 15px 20px;
+  border-radius: 10px;
+}
+
+/* Показываем только на телефонах */
+@media (min-width: 600px) {
+  .touch-controls {
+    display: none;
+  }
+}
